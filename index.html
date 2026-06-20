@@ -36,10 +36,6 @@
       background: linear-gradient(180deg, #b5d2ff 0%, #d2f1ff 100%);
     }
 
-    #gatekeeperOverlay {
-      background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%);
-    }
-
     .gpu-accelerated {
       transform: translate3d(0, 0, 0);
       will-change: transform, opacity;
@@ -81,26 +77,7 @@
 </head>
 <body class="w-full relative select-none">
 
-  <div id="gatekeeperOverlay" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-    <div class="bg-white/90 backdrop-blur-md rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center space-y-4 border border-white">
-      <div class="w-16 h-16 bg-sky-500 rounded-full flex items-center justify-center text-white text-2xl mx-auto shadow-lg animate-bounce">
-        <i class="fas fa-lock"></i>
-      </div>
-      <div>
-        <h2 class="font-pop text-sm text-sky-800 tracking-wider">ひみつの空ひろば</h2>
-        <p class="text-[10px] text-sky-600 font-medium mt-1">ここから先はパスワードが必要です🔑</p>
-      </div>
-      <div class="space-y-2">
-        <input type="password" id="gatePassInput" placeholder="パスワードを入力" class="w-full text-center px-4 py-2.5 rounded-xl border-2 border-sky-200 outline-none focus:border-sky-400 text-sky-800 font-semibold text-xs tracking-widest shadow-inner">
-        <p id="gateErrorMsg" class="text-[10px] text-rose-500 font-semibold hidden">パスワードが違うよ！🥺</p>
-      </div>
-      <button id="gateSubmitBtn" class="w-full py-2.5 bg-gradient-to-r from-sky-400 to-blue-500 text-white font-semibold rounded-xl shadow-md border-b-2 border-blue-600 text-xs active:scale-98">
-        ひろばに入る！
-      </button>
-    </div>
-  </div>
-
-  <div id="mainContent" class="absolute inset-0 z-10 w-full h-full flex flex-col p-3 box-border opacity-0 pointer-events-none transition-opacity duration-500">
+  <div id="mainContent" class="absolute inset-0 z-10 w-full h-full flex flex-col p-3 box-border transition-opacity duration-500">
     
     <div class="absolute inset-0 z-0 overflow-hidden pointer-events-none">
       <div class="drift-cloud-1 absolute top-8 left-[-300px] w-[260px] h-[80px] bg-white/30 rounded-full"></div>
@@ -292,7 +269,6 @@
     // 🔗 Supabaseの初期化
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const MAIN_PAGE_PASSWORD = "9441";  
     const ADMIN_MASTER_KEY = "0917";      
 
     let isMuted = true;
@@ -303,25 +279,6 @@
       { id: "default-2", nickname: "エース岡田", emoji: "🐻", category: "新規契約", userType: "20代単身", status: "アパート一人暮らし", purpose: "ネットの速度相談", talkExample: "「工事不要でコンセントに挿すだけのWi-Fiなら、今日からすぐYouTubeもゲームもサクサク使い放題になりますよ！🚀」", color: "pink", deleteKey: "2222", likes: 24, x: 45, y: 35, animType: 2 },
       { id: "default-3", nickname: "マネージャー", emoji: "🐰", category: "料金見直し", userType: "ファミリー層", status: "家族4人（他社回線）", purpose: "固定費を下げたい", talkExample: "「ご家族全員のスマホと、お家のネットをセットにまとめるだけで、毎月映画1本分以上の節約になります！🎬」", color: "green", deleteKey: "3333", likes: 18, x: 25, y: 60, animType: 3 }
     ];
-
-    function checkGatePassword() {
-      const input = document.getElementById('gatePassInput').value;
-      const errorMsg = document.getElementById('gateErrorMsg');
-      const overlay = document.getElementById('gatekeeperOverlay');
-      const mainContent = document.getElementById('mainContent');
-
-      if (input === MAIN_PAGE_PASSWORD) {
-        errorMsg.classList.add('hidden');
-        overlay.classList.add('hidden');
-        mainContent.classList.remove('opacity-0', 'pointer-events-none');
-        try { sessionStorage.setItem('gate_authenticated', 'true'); } catch(e){}
-        initAudio();
-        playPopSound();
-      } else {
-        errorMsg.classList.remove('hidden');
-        document.getElementById('gatePassInput').value = '';
-      }
-    }
 
     function initAudio() {
       if (isMuted) return;
@@ -374,17 +331,14 @@
     let currentDetailId = null;
     let keypadInputValue = "";
 
-    // 📥 データベースから最新の投稿を取得する関数
     async function loadFromDatabase() {
-      // ⏱️ Supabaseがフリーズした時のための500msタイムアウト処理
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 500));
       const fetchPromise = supabase.from('posts').select('*');
 
-      // 通信かタイムアウト、どちらか早い方を採用する
       const { data, error } = await Promise.race([fetchPromise, timeoutPromise]).catch(e => ({ error: e }));
 
       if (error) {
-        console.warn("データベース接続失敗（またはタイムアウト）。サンプルデータを使用します。");
+        console.warn("データベース接続失敗。サンプルデータを使用します。");
         answerDatabase = [...defaultAnswers];
       } else if (data && data.length > 0) {
         answerDatabase = data;
@@ -394,7 +348,6 @@
       renderBoard();
     }
 
-    // 🔔 リアルタイム同期
     function setupRealtimeListener() {
       try {
         supabase
@@ -403,32 +356,16 @@
             loadFromDatabase();
           })
           .subscribe();
-      } catch(e) {
-        console.error("リアルタイム同期の設定に失敗しました:", e);
-      }
+      } catch(e) {}
     }
 
     window.addEventListener('DOMContentLoaded', () => {
-      // 🔒 先に絶対に動かすべき基本イベント（パスワード認証）を最優先で登録！
-      document.getElementById('gateSubmitBtn').addEventListener('click', checkGatePassword);
-      document.getElementById('gatePassInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') checkGatePassword();
-      });
-
-      try {
-        if (sessionStorage.getItem('gate_authenticated') === 'true') {
-          document.getElementById('gatekeeperOverlay').classList.add('hidden');
-          document.getElementById('mainContent').classList.remove('opacity-0', 'pointer-events-none');
-        }
-      } catch(e){}
-
-      // ⚙️ 起動プロセス（通信が完全に詰まってもクラッシュさせない）
+      // ⚙️ 起動プロセス
       (async () => {
         try {
           await loadFromDatabase();
           setupRealtimeListener();
         } catch (e) {
-          console.error("初期ロード異常:", e);
           answerDatabase = [...defaultAnswers];
           renderBoard();
         }
