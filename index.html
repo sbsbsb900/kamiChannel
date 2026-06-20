@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>カラフル・メッセージ・スカイ</title>
+    <style>
+        /* --- 背景：カラフルな夕暮れの空 --- */
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            /* ピンク、紫、水色が混ざったようなグラデーション */
+            background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%),
+                        linear-gradient(20deg, #b8cbb8 0%, #b8cbb8 0%, #b465da 0%, #cf6cc9 33%, #ee609c 66%, #ee609c 100%);
+            background-blend-mode: color-burn, normal;
+            overflow: hidden;
+            font-family: 'Hiragino Maru Gothic ProN', 'Yu Gothic', sans-serif; /* 丸文字っぽく */
+        }
+
+        /* --- 投稿フォーム --- */
+        #form-container {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px 30px;
+            border-radius: 50px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 15px;
+            backdrop-filter: blur(5px); /* 背景を少しぼかすおしゃれ効果 */
+        }
+
+        input[type="text"] {
+            padding: 12px 20px;
+            border: 2px solid #ddd;
+            border-radius: 30px;
+            width: 280px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            border-color: #ff9a9e; /* 暖色系のフォーカス色 */
+        }
+
+        button {
+            background: linear-gradient(45deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(255, 154, 158, 0.4);
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            box-shadow: 0 6px 15px rgba(255, 154, 158, 0.6);
+        }
+
+        button:active {
+            transform: scale(0.95); /* 押した時に少し小さくなる */
+        }
+
+        /* --- カラフルな雲のスタイル --- */
+        .cloud-
