@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>神Ch掲示板 ☁️</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Nunito"', 'system-ui', '-apple-system', 'sans-serif'],
+            pop: ['"Mochiy Pop One"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      overscroll-behavior: none;
+      background: linear-gradient(180deg, #b5d2ff 0%, #d2f1ff 100%);
+    }
+
+    #gatekeeperOverlay {
+      background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%);
+    }
+
+    .gpu-accelerated {
+      transform: translate3d(0, 0, 0);
+      will-change: transform, opacity;
+      backface-visibility: hidden;
+    }
+
+    /* ふわふわアニメーション（ドラッグ中は一時的に無効化されます） */
+    @keyframes float-slow {
+      0%, 100% { transform: translateY(0px) rotate(-0.5deg); }
+      50% { transform: translateY(-8px) rotate(0.5deg); }
+    }
+    @keyframes float-mid {
+      0%, 100% { transform: translateY(0px) rotate(0.8deg); }
+      50% { transform: translateY(-14px) rotate(-0.8deg); }
+    }
+    @keyframes float-fast {
+      0%, 100% { transform: translateY(0px) rotate(-1deg); }
+      50% { transform: translateY(-20px) rotate(1deg); }
+    }
+    .animate-float-1 { animation: float-slow 6.5s ease-in-out infinite; }
+    .animate-float-2 { animation: float-mid 4.8s ease-in-out infinite; }
+    .animate-float-3 { animation: float-fast 5.5s ease-in-out infinite; }
+
+    @keyframes drift {
+      from { transform: translate3d(-20%, 0, 0); }
+      to { transform: translate3d(120%, 0, 0); }
+    }
+    .drift-cloud-1 { animation: drift 140s linear infinite; }
+    .drift-cloud-2 { animation: drift 190s linear infinite; delay: -40s; }
+
+    /* ドラッグ操作を最優先にするため none を指定、JSで適切に制御 */
+    button, .answer-cloud-card {
+      touch-action: none; 
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.25); border-radius: 10px; }
+  </style>
+</head>
+<body class="w-full relative select-none">
+
+  <!-- パスワード画面（hiddenを追加して最初から非表示にしました） -->
+  <div id="gatekeeperOverlay" class="fixed inset-0 z-[100] flex items-center justify-center p-4 hidden">
+    <div class="bg-white/90 backdrop-blur-md rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center space-y-4 border border-white">
+      <div class="w-16 h-16 bg-sky-500 rounded-full flex items-center justify-center text-white text-2xl mx-auto shadow-lg animate-bounce">
+        <i class="fas fa-lock"></i>
+      </div>
+      <div>
+        <h2 class="font-pop text-sm text-sky-800 tracking-wider">ひみつの空ひろば</h2>
+        <p class="text-[10px] text-sky-600 font-medium mt-1">ここから先はパスワードが必要です🔑</p>
+      </div>
+      <div class="space-y-2">
+        <input type="password" id="gatePassInput" placeholder="パスワードを入力" class="w-full text-center px-4 py-2.5 rounded-xl border-2 border-sky-200 outline-none focus:border-sky-400 text-sky-800 font-semibold text-xs tracking-widest shadow-inner">
+        <p id="gateErrorMsg" class="text-[10px] text-rose-500 font-semibold hidden">パスワードが違うよ！🥺</p>
+      </div>
+      <button id="gateSubmitBtn" class="w-full py-2.5 bg-gradient-to-r from-sky-400 to-blue-500 text-white font-semibold rounded-xl shadow-md border-b-2 border-blue-600 text-xs active:scale-98">
+        ひろばに入る！
+      </button>
+    </div>
+  </div>
+
+  <!-- メイン画面（opacity-0 と pointer-events-none を削除して最初から表示されるようにしました） -->
+  <div id="mainContent" class="absolute inset-0 z-10 w-full h-full flex flex-col p-3 box-border transition-opacity duration-500">
+    
+    <div class="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+      <div class="drift-cloud-1 absolute top-8 left-[-300px] w-[260px] h-[80px] bg-white/30 rounded-full"></div>
+      <div class="drift-cloud-2 absolute top-1/3 left-[-400px] w-[320px] h-[90px] bg-white/20 rounded-full"></div>
+    </div>
+
+    <header class="w-full max-w-4xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white/85 rounded-2xl p-3 shadow-md border border-white/60 flex-shrink-0">
+      <div class="flex items-center justify-between sm:justify-start gap-2.5">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-sky-400 rounded-xl flex items-center justify-center text-white text-base shadow-sm transform rotate-[-2deg]">☁️</div>
+          <div>
+            <h1 class="font-pop text-xs md:text-sm text-sky-700 tracking-wider font-normal">神Ch掲示板</h1>
+            <p class="text-[9px] text-sky-600/80 font-medium">みんなの投稿が空に浮かぶよ！指で動かせるよ👇</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 sm:hidden">
+          <button id="muteBtnMob" class="w-7 h-7 rounded-lg bg-white text-rose-500 border border-sky-100 shadow-sm flex items-center justify-center active:scale-90">
+            <i class="fas fa-volume-mute"></i>
+          </button>
+          <button id="helpOpenBtnMob" class="w-7 h-7 rounded-lg bg-sky-500 text-white shadow-md flex items-center justify-center active:scale-90">
+            <i class="fas fa-question text-xs"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between sm:justify-end gap-2 flex-wrap">
+        <div class="text-[9px] md:text-xs font-semibold text-sky-900 bg-sky-50 px-2.5 py-1.5 rounded-xl border border-sky-100 shadow-xs">
+          空の投稿: <span id="answerCount" class="text-sky-600 font-bold">0</span> 個
+        </div>
+        
+        <button id="postOpenBtn" class="bg-gradient-to-r from-pink-400 via-pink-500 to-rose-400 text-white font-semibold text-[10px] md:text-xs px-3 py-2 rounded-xl shadow-md border-b-[3px] border-pink-600 active:scale-95 flex items-center gap-1 z-20">
+          <i class="fas fa-paper-plane text-[8px]"></i>
+          <span>投稿を浮かべる！</span>
+        </button>
+
+        <div class="hidden sm:flex items-center gap-1.5">
+          <button id="muteBtn" class="w-7 h-7 rounded-lg bg-white text-rose-500 border border-sky-100 shadow-sm flex items-center justify-center active:scale-90">
+            <i class="fas fa-volume-mute"></i>
+          </button>
+          <button id="helpOpenBtn" class="w-7 h-7 rounded-lg bg-sky-500 text-white shadow-md flex items-center justify-center active:scale-90">
+            <i class="fas fa-question text-xs"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="skyBoard" class="relative flex-grow w-full my-3 overflow-hidden rounded-2xl border-2 border-dashed border-white/50 bg-sky-300/10">
+      <div id="welcomeMessage" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-sky-700/60 p-4 text-center">
+        <p class="text-xs font-semibold mb-1">☁️ 投稿の空へようこそ ☁️</p>
+        <p class="text-[9px] font-medium">まだ投稿が浮かんでいません。最初の投稿を飛ばしてみよう！</p>
+      </div>
+    </main>
+  </div>
+
+  <!-- 投稿モーダル -->
+  <div id="postModal" class="fixed inset-0 bg-sky-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl w-full max-w-lg shadow-xl border-2 border-pink-200 overflow-hidden transform scale-95 flex flex-col max-h-[90vh]">
+      <div class="bg-gradient-to-r from-pink-300 to-rose-300 p-3 text-white flex justify-between items-center flex-shrink-0">
+        <h3 class="text-xs font-semibold flex items-center gap-2 text-rose-800"><i class="fas fa-cloud-upload-alt"></i> 投稿を浮かべる</h3>
+        <button id="postCloseBtn" class="w-7 h-7 rounded-full bg-white/50 text-rose-800 flex items-center justify-center"><i class="fas fa-times text-xs"></i></button>
+      </div>
+      <div class="p-4 space-y-3 overflow-y-auto flex-grow text-xs">
+        <div>
+          <label class="block text-[10px] font-semibold text-sky-800 mb-0.5">名前</label>
+          <input type="text" id="nicknameInput" maxlength="12" placeholder="おなまえ" class="w-full px-3 py-1.5 rounded-lg border-2 border-sky-100 outline-none focus:border-pink-300 text-sky-800 bg-sky-50/50">
+        </div>
+        <div>
+          <label class="block text-[10px] font-semibold text-sky-800 mb-0.5">アイコン（どうぶつ）</label>
+          <div class="flex gap-1.5 flex-wrap max-h-20 overflow-y-auto p-1 bg-sky-50/30 rounded-lg" id="emojiSelector"></div>
+          <input type="hidden" id="selectedEmoji" value="🐱">
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-sky-50/50 p-3 rounded-xl border border-sky-100">
+          <div>
+            <label class="block text-[9px] font-semibold text-sky-800 mb-0.5">獲得種別</label>
+            <input type="text" id="categoryInput" maxlength="20" placeholder="例：機種変更" class="w-full px-2 py-1.5 rounded-lg border border-sky-100 outline-none focus:border-pink-300 text-sky-800 bg-white text-[11px]">
+          </div>
+          <div>
+            <label class="block text-[9px] font-semibold text-sky-800 mb-0.5">お客様種別</label>
+            <input type="text" id="userTypeInput" maxlength="20" placeholder="例：ファミリー層" class="w-full px-2 py-1.5 rounded-lg border border-sky-100 outline-none focus:border-pink-300 text-sky-800 bg-white text-[11px]">
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-[9px] font-semibold text-sky-800 mb-0.5">固定状況</label>
+            <input type="text" id="statusInput" maxlength="30" placeholder="例：未利用、CATVなど" class="w-full px-2 py-1.5 rounded-lg border border-sky-100 outline-none focus:border-pink-300 text-sky-800 bg-white text-[11px]">
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-[9px] font-semibold text-sky-800 mb-0.5">来店目的</label>
+            <input type="text" id="purposeInput" maxlength="45" placeholder="例：プラン相談など" class="w-full px-2 py-1.5 rounded-lg border border-sky-100 outline-none focus:border-pink-300 text-sky-800 bg-white text-[11px]">
+          </div>
+        </div>
+        <div>
+          <label class="block text-[10px] font-semibold text-sky-800 mb-0.5">トーク例</label>
+          <textarea id="talkExampleInput" maxlength="150" rows="3" placeholder="接客やアプローチの実際のフレーズなど" class="w-full px-3 py-1.5 rounded-lg border-2 border-sky-100 outline-none focus:border-pink-300 text-sky-800 bg-sky-50/50 resize-none text-[11px]"></textarea>
+        </div>
+        <div>
+          <label class="block text-[10px] font-semibold text-sky-800 mb-0.5">雲の色</label>
+          <div class="flex gap-2" id="colorSelector"></div>
+          <input type="hidden" id="selectedColor" value="pink">
+        </div>
+        <div class="bg-amber-50/70 p-2.5 rounded-xl border border-amber-200">
+          <label class="block text-[9px] font-semibold text-amber-800 mb-0.5">ひみつのカギ🔑（削除用の4桁）</label>
+          <div class="flex items-center gap-2">
+            <input type="text" id="deleteKeyInput" pattern="[0-9]{4}" maxlength="4" placeholder="1234" class="w-16 text-center px-1.5 py-1 rounded-md border border-amber-200 outline-none focus:border-amber-300 font-semibold text-amber-800 bg-white text-xs">
+          </div>
+        </div>
+        <button id="postSubmitBtn" type="button" class="w-full py-2.5 bg-gradient-to-r from-pink-400 to-rose-400 text-white font-semibold rounded-lg shadow border-b-2 border-pink-600 flex items-center justify-center gap-1 text-[11px] cursor-pointer">
+          <i class="fas fa-cloud-upload-alt"></i><span>空へリリースする！</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 詳細モーダル -->
+  <div id="detailModal" class="fixed inset-0 bg-sky-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden">
+    <div id="detailCard" class="bg-white rounded-2xl w-full max-w-md shadow-xl p-4 border-2 border-sky-300 relative flex flex-col max-h-[85vh]">
+      <button id="detailCloseBtn" class="absolute top-3 right-3 w-7 h-7 rounded-full bg-sky-100 text-sky-800 flex items-center justify-center z-10"><i class="fas fa-times text-xs"></i></button>
+      <div class="overflow-y-auto space-y-3 pt-2 pr-1 text-[11px] md:text-xs">
+        <div class="text-center space-y-1">
+          <div id="detailEmoji" class="text-3xl animate-bounce">🐱</div>
+          <div><span class="bg-sky-100 text-sky-800 font-semibold text-[9px] px-2.5 py-0.5 rounded-full" id="detailAuthor">ななし</span></div>
+        </div>
+        <div id="detailContentArea" class="space-y-2"></div>
+        <div class="border-t border-sky-100 my-2"></div>
+        <div class="flex flex-col items-center gap-1 text-center">
+          <button id="detailLikeBtn" class="flex items-center gap-1 bg-rose-500 text-white font-semibold px-4 py-1.5 rounded-full shadow border-b-2 border-rose-700 text-[10px]">
+            <i class="fas fa-heart text-[8px]"></i><span>キュン！ <span id="detailLikeCount" class="font-bold">0</span></span>
+          </button>
+        </div>
+        <div class="pt-1 mt-2 border-t border-dashed border-sky-100 flex flex-col items-center">
+          <button id="deleteBtn" class="text-[9px] font-medium text-gray-400 hover:text-rose-500 flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-rose-50">
+            <i class="fas fa-trash-alt text-[9px]"></i><span id="deleteBtnText">この投稿を削除する</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- キーパッドモーダル -->
+  <div id="keypadModal" class="fixed inset-0 bg-sky-900/40 backdrop-blur-md z-[60] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl w-full max-w-xs shadow-xl border-2 border-amber-300 p-4 text-center space-y-3">
+      <div class="flex justify-between items-center">
+        <h4 class="text-[10px] text-amber-800 flex items-center gap-1 font-semibold"><i class="fas fa-key text-[9px]"></i> ひみつのカギ解除🔑</h4>
+        <button id="keypadCloseBtn" class="w-6 h-6 rounded-full bg-amber-50 text-amber-800 flex items-center justify-center"><i class="fas fa-times text-[9px]"></i></button>
+      </div>
+      <div class="bg-amber-50 border border-amber-200 rounded-lg py-1.5 px-3 relative">
+        <span id="keypadDisplay" class="font-semibold text-base tracking-[0.5em] text-amber-900 block pl-3">____</span>
+        <div id="keypadError" class="absolute inset-0 bg-rose-500 text-white font-medium text-[10px] flex items-center justify-center rounded-lg hidden">カギが違うよ！🥺</div>
+      </div>
+      <div class="grid grid-cols-3 gap-1.5 text-xs" id="keypadGrid">
+        <button type="button" class="keypad-btn" data-key="1">1</button>
+        <button type="button" class="keypad-btn" data-key="2">2</button>
+        <button type="button" class="keypad-btn" data-key="3">3</button>
+        <button type="button" class="keypad-btn" data-key="4">4</button>
+        <button type="button" class="keypad-btn" data-key="5">5</button>
+        <button type="button" class="keypad-btn" data-key="6">6</button>
+        <button type="button" class="keypad-btn" data-key="7">7</button>
+        <button type="button" class="keypad-btn" data-key="8">8</button>
+        <button type="button" class="keypad-btn" data-key="9">9</button>
+        <button type="button" class="keypad-btn-action bg-rose-100 text-rose-700 font-semibold" data-key="C">C</button>
+        <button type="button" class="keypad-btn" data-key="0">0</button>
+        <button type="button" class="keypad-btn-action bg-emerald-400 text-white font-semibold" data-key="OK">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ヘルプモーダル -->
+  <div id="helpModal" class="fixed inset-0 bg-sky-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl w-full max-w-md shadow-xl p-4 border-2 border-sky-300 text-xs">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="text-xs text-sky-700 flex items-center gap-1.5 font-semibold"><i class="fas fa-info-circle"></i> 遊びかた</h3>
+        <button id="helpCloseBtn" class="w-7 h-7 rounded-full bg-sky-100 text-sky-800 flex items-center justify-center"><i class="fas fa-times text-xs"></i></button>
+      </div>
+      <div class="space-y-2 text-sky-800 font-medium leading-relaxed max-h-[50vh] overflow-y-auto">
+        <p>🌤️ <strong>1. 投稿を見てみよう</strong><br>空に浮いている雲カードをクリックすると詳細情報を見ることができます。</p>
+        <p>👉 <strong>2. 雲を指で動かそう</strong><br>スマホの画面上で雲を指でスライドすると好きな場所に移動できます！</p>
+        <p>💖 <strong>3. いいね！を送ろう</strong><br>素敵なトーク術には「いいね！」（キュン！）を押して応援しましょう。</p>
+        <p>🔑 <strong>4. 投稿の削除制限</strong><br>投稿を消すときは、設定した「ひみつのカギ🔑」を入力してください。</p>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .keypad-btn { background-color: #f3f4f6; border-bottom: 3px solid #d1d5db; font-size: 0.95rem; font-weight: 600; color: #374151; padding: 0.35rem 0; border-radius: 0.5rem; cursor: pointer; }
+    .keypad-btn:active { transform: translateY(2px); border-bottom-width: 1px; }
+    .keypad-btn-action { font-size: 0.7rem; padding: 0.35rem 0; border-radius: 0.5rem; border-bottom: 3px solid rgba(0,0,0,0.15); cursor: pointer; }
+    .keypad-btn-action:active { transform: translateY(2px); border-bottom-width: 1px; }
+  </style>
+
+  <script>
+    const MAIN_PAGE_PASSWORD = "9441";  
+    const ADMIN_MASTER_KEY = "0917";      
+
+    let isMuted = true;
+    let audioCtx = null;
+
+    const defaultAnswers = [
+      {
+        id: "default-1",
+        nickname: "かなパイセン",
+        emoji: "🦊",
+        category: "機種変更",
+        userType: "シニア層",
+        status: "ガラケー利用（他社）",
+        purpose: "操作の相談",
+        talkExample: "「今のスマホ、毎月の料金どれくらいかご存知ですか？実は今のプランのまま安くできるチャンスがあるんですよ😊」",
+        color: "blue",
+        deleteKey: "1111",
+        likes: 12,
+        x: 10,
+        y: 20,
+        animType: 1
+      },
+      {
+        id: "default-2",
+        nickname: "エース岡田",
+        emoji: "🐻",
+        category: "新規契約",
+        userType: "20代単身",
+        status: "アパート一人暮らし",
+        purpose: "ネットの速度相談",
+        talkExample: "「工事不要でコンセントに挿すだけのWi-Fiなら、今日からすぐYouTubeもゲームもサクサク使い放題になりますよ！🚀」",
+        color: "pink",
+        deleteKey: "2222",
+        likes: 24,
+        x: 45,
+        y: 35,
+        animType: 2
+      },
+      {
+        id: "default-3",
+        nickname: "マネージャー",
+        emoji: "🐰",
+        category: "料金見直し",
+        userType: "ファミリー層",
+        status: "家族4人（他社回線）",
+        purpose: "固定費を下げたい",
+        talkExample: "「ご家族全員のスマホと、お家のネットをセットにまとめるだけで、毎月映画1本分以上の節約になります！🎬」",
+        color: "green",
+        deleteKey: "3333",
+        likes: 18,
+        x: 25,
+        y: 60,
+        animType: 3
+      }
+    ];
+
+    function checkGatePassword() {
+      const input = document.getElementById('gatePassInput').value;
+      const errorMsg = document.getElementById('gateErrorMsg');
+      const overlay = document.getElementById('gatekeeperOverlay');
+      const mainContent = document.getElementById('mainContent');
+
+      if (input === MAIN_PAGE_PASSWORD) {
+        errorMsg.classList.add('hidden');
+        overlay.classList.add('hidden');
+        mainContent.classList.remove('opacity-0', 'pointer-events-none');
+        
+        try { sessionStorage.setItem('gate_authenticated', 'true'); } catch(e){}
+        
+        initAudio();
+        playPopSound();
+      } else {
+        errorMsg.classList.remove('hidden');
+        document.getElementById('gatePassInput').value = '';
+      }
+    }
+
+    function initAudio() {
+      if (isMuted) return;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+      } catch (e) {}
+    }
+
+    function playPopSound() {
+      if (isMuted || !audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination); osc.type = 'sine';
+        osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+      } catch(e){}
+    }
+
+    function toggleMute() {
+      isMuted = !isMuted;
+      const syncMuteBtns = () => {
+        [document.getElementById('muteBtn'), document.getElementById('muteBtnMob')].forEach(btn => {
+          if(!btn) return;
+          if (isMuted) {
+            btn.innerHTML = '<i class="fas fa-volume-mute"></i>';
+            btn.className = "w-7 h-7 rounded-lg bg-white text-rose-500 border border-sky-100 shadow-sm flex items-center justify-center active:scale-90";
+          } else {
+            btn.innerHTML = '<i class="fas fa-volume-up"></i>';
+            btn.className = "w-7 h-7 rounded-lg bg-white text-sky-600 border border-sky-100 shadow-sm flex items-center justify-center active:scale-90";
+          }
+        });
+      };
+      syncMuteBtns();
+      if (!isMuted) initAudio();
+    }
+
+    let answerDatabase = [];
+    const colorPalettes = {
+      pink: { bg: "bg-pink-50/95", border: "border-pink-200", text: "text-pink-700", shadow: "shadow-pink-100" },
+      blue: { bg: "bg-sky-50/95", border: "border-sky-200", text: "text-sky-700", shadow: "shadow-sky-100" },
+      yellow: { bg: "bg-amber-50/95", border: "border-amber-200", text: "text-amber-700", shadow: "shadow-amber-100" },
+      purple: { bg: "bg-purple-50/95", border: "border-purple-200", text: "text-purple-700", shadow: "shadow-purple-100" },
+      green: { bg: "bg-emerald-50/95", border: "border-emerald-200", text: "text-emerald-700", shadow: "shadow-emerald-100" }
+    };
+    const emojis = ["🐱", "🐶", "🐰", "🦊", "🐻", "🐼", "🐨", "🦁", "🐯", "🐹", "🐸", "🐵", "🐧", "🐦", "🐥"];
+    let currentDetailId = null;
+    let keypadInputValue = "";
+
+    function saveToStorage(data) {
+      try {
+        localStorage.setItem('sky_answers_db', JSON.stringify(data));
+      } catch (e) {
+        console.warn("Storage write restriction detected.");
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      // パスワード関係なく、常にメイン画面を表示するように処理を統合
+      document.getElementById('gatekeeperOverlay').classList.add('hidden');
+      document.getElementById('mainContent').classList.remove('opacity-0', 'pointer-events-none');
+
+      document.getElementById('gateSubmitBtn').addEventListener('click', checkGatePassword);
+      document.getElementById('gatePassInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') checkGatePassword();
+      });
+
+      try {
+        const savedAnswers = localStorage.getItem('sky_answers_db');
+        if (savedAnswers && JSON.parse(savedAnswers).length > 0) {
+          answerDatabase = JSON.parse(savedAnswers);
+        } else {
+          answerDatabase = [...defaultAnswers];
+        }
+      } catch (e) {
+        answerDatabase = [...defaultAnswers];
+      }
+      
+      setupFormOptions();
+      renderBoard();
+
+      document.getElementById('muteBtn').addEventListener('click', toggleMute);
+      document.getElementById('muteBtnMob').addEventListener('click', toggleMute);
+      
+      const openHelp = () => { initAudio(); document.getElementById('helpModal').classList.remove('hidden'); };
+      document.getElementById('helpOpenBtn').addEventListener('click', openHelp);
+      document.getElementById('helpOpenBtnMob').addEventListener('click', openHelp);
+
+      document.getElementById('helpCloseBtn').addEventListener('click', () => document.getElementById('helpModal').classList.add('hidden'));
+      document.getElementById('postOpenBtn').addEventListener('click', openPostModal);
+      document.getElementById('postCloseBtn').addEventListener('click', () => document.getElementById('postModal').classList.add('hidden'));
+      document.getElementById('detailCloseBtn').addEventListener('click', () => document.getElementById('detailModal').classList.add('hidden'));
+      document.getElementById('deleteBtn').addEventListener('click', clickDeleteBtn);
+      document.getElementById('keypadCloseBtn').addEventListener('click', () => document.getElementById('keypadModal').classList.add('hidden'));
+      
+      document.getElementById('postSubmitBtn').addEventListener('click', executeSubmitAnswer);
+      document.getElementById('detailLikeBtn').addEventListener('click', executeLike);
+
+      document.querySelectorAll('#keypadGrid button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const key = btn.getAttribute('data-key');
+          pressKey(key);
+        });
+      });
+    });
+
+    function generateRandom4DigitKey() {
+      return Math.floor(1000 + Math.random() * 9000).toString();
+    }
+
+    function setupFormOptions() {
+      const emojiSelector = document.getElementById('emojiSelector');
+      emojiSelector.innerHTML = '';
+      emojis.forEach((emoji, index) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `w-8 h-8 flex items-center justify-center text-lg rounded-lg border ${index === 0 ? 'border-pink-400 bg-pink-50' : 'border-gray-200 bg-white'}`;
+        btn.textContent = emoji;
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#emojiSelector button').forEach(b => b.className = 'w-8 h-8 flex items-center justify-center text-lg rounded-lg border border-gray-200 bg-white');
+          btn.className = 'w-8 h-8 flex items-center justify-center text-lg rounded-lg border border-pink-400 bg-pink-50';
+          document.getElementById('selectedEmoji').value = emoji;
+        });
+        emojiSelector.appendChild(btn);
+      });
+
+      const colorSelector = document.getElementById('colorSelector');
+      colorSelector.innerHTML = '';
+      Object.keys(colorPalettes).forEach((color, index) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        let bgClass = 'bg-pink-300';
+        if(color === 'blue') bgClass = 'bg-sky-300';
+        if(color === 'yellow') bgClass = 'bg-amber-300';
+        if(color === 'purple') bgClass = 'bg-purple-300';
+        if(color === 'green') bgClass = 'bg-emerald-300';
+
+        btn.className = `w-6 h-6 rounded-full ${bgClass} border-2 ${index === 0 ? 'border-gray-700 scale-110' : 'border-transparent'}`;
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#colorSelector button').forEach(b => b.classList.remove('border-gray-700', 'scale-110'));
+          btn.classList.add('border-gray-700', 'scale-110');
+          document.getElementById('selectedColor').value = color;
+        });
+        colorSelector.appendChild(btn);
+      });
+
+      document.getElementById('deleteKeyInput').value = generateRandom4DigitKey();
+    }
+
+    function openPostModal() {
+      initAudio();
+      document.getElementById('nicknameInput').value = '';
+      document.getElementById('categoryInput').value = '';
+      document.getElementById('userTypeInput').value = '';
+      document.getElementById('statusInput').value = '';
+      document.getElementById('purposeInput').value = '';
+      document.getElementById('talkExampleInput').value = '';
+      document.getElementById('deleteKeyInput').value = generateRandom4DigitKey();
+      document.getElementById('postModal').classList.remove('hidden');
+    }
+
+    function executeSubmitAnswer() {
+      const nickname = document.getElementById('nicknameInput').value.trim() || "ななし";
+      const emoji = document.getElementById('selectedEmoji').value;
+      const category = document.getElementById('categoryInput').value.trim();
+      const userType = document.getElementById('userTypeInput').value.trim();
+      const status = document.getElementById('statusInput').value.trim();
+      const purpose = document.getElementById('purposeInput').value.trim();
+      const talkExample = document.getElementById('talkExampleInput').value.trim();
+      const color = document.getElementById('selectedColor').value;
+      const deleteKey = document.getElementById('deleteKeyInput').value.trim();
+
+      if (!talkExample) {
+        alert("トーク例を入力してください！☁️");
+        return;
+      }
+      if (!/^\d{4}$/.test(deleteKey)) {
+        alert("ひみつのカギは4桁の数字で入力してください🔑");
+        return;
+      }
+
+      const newPost = {
+        id: Date.now().toString(),
+        nickname,
+        emoji,
+        category,
+        userType,
+        status,
+        purpose,
+        talkExample,
+        color,
+        deleteKey,
+        likes: 0,
+        x: Math.random() * 60 + 5,
+        y: Math.random() * 55 + 15,
+        animType: Math.floor(Math.random() * 3) + 1
+      };
+
+      answerDatabase.push(newPost);
+      saveToStorage(answerDatabase);
+      
+      playPopSound();
+      renderBoard();
+      document.getElementById('postModal').classList.add('hidden');
+    }
+
+    function renderBoard() {
+      const board = document.getElementById('skyBoard');
+      const countSpan = document.getElementById('answerCount');
+      const welcome = document.getElementById('welcomeMessage');
+
+      document.querySelectorAll('.answer-cloud-card').forEach(el => el.remove());
+      countSpan.textContent = answerDatabase.length;
+
+      if (answerDatabase.length === 0) {
+        welcome.classList.remove('hidden');
+        return;
+      } else {
+        welcome.classList.add('hidden');
+      }
+
+      answerDatabase.forEach(post => {
+        const palette = colorPalettes[post.color] || colorPalettes.pink;
+        const card = document.createElement('div');
+        card.className = `answer-cloud-card gpu-accelerated absolute px-3 py-2 rounded-2xl border-2 ${palette.bg} ${palette.border} ${palette.shadow} shadow-md flex items-center gap-1.5 cursor-pointer max-w-[150px] md:max-w-[190px] animate-float-${post.animType}`;
+        card.style.left = `${post.x}%`;
+        card.style.top = `${post.y}%`;
+        
+        card.innerHTML = `
+          <span class="text-base flex-shrink-0 select-none pointer-events-none">${post.emoji}</span>
+          <div class="overflow-hidden select-none pointer-events-none">
+            <p class="text-[9px] font-bold ${palette.text} truncate">${post.nickname}</p>
+            <p class="text-[10px] font-medium text-gray-700 truncate">${post.talkExample}</p>
+          </div>
+        `;
+
+        setupDragElement(card, post);
+
+        board.appendChild(card);
+      });
+    }
+
+    function setupDragElement(card, postData) {
+      let active = false;
+      let currentX;
+      let currentY;
+      let initialX;
+      let initialY;
+      let xOffset = 0;
+      let yOffset = 0;
+      let hasDragged = false; 
+
+      const board = document.getElementById('skyBoard');
+
+      card.addEventListener('touchstart', dragStart, { passive: false });
+      card.addEventListener('touchend', dragEnd, { passive: true });
+      card.addEventListener('touchmove', drag, { passive: false });
+
+      card.addEventListener('mousedown', dragStart, { passive: false });
+      window.addEventListener('mouseup', dragEnd, { passive: true });
+      window.addEventListener('mousemove', drag, { passive: false });
+
+      function dragStart(e) {
+        initAudio();
+        hasDragged = false;
+        
+        card.classList.remove(`animate-float-${postData.animType}`);
+        card.style.zIndex = "40"; 
+
+        const boardRect = board.getBoundingClientRect();
+        const cardRect = card.getBoundingClientRect();
+
+        xOffset = cardRect.left - boardRect.left;
+        yOffset = cardRect.top - boardRect.top;
+
+        if (e.type === "touchstart") {
+          initialX = e.touches[0].clientX - xOffset;
+          initialY = e.touches[0].clientY - yOffset;
+        } else {
+          initialX = e.clientX - xOffset;
+          initialY = e.clientY - yOffset;
+        }
+
+        if (e.target === card || card.contains(e.target)) {
+          active = true;
+        }
+      }
+
+      function drag(e) {
+        if (!active) return;
+        e.preventDefault(); 
+
+        if (e.type === "touchmove") {
+          currentX = e.touches[0].clientX - initialX;
+          currentY = e.touches[0].clientY - initialY;
+        } else {
+          currentX = e.clientX - initialX;
+          currentY = e.clientY - initialY;
+        }
+
+        if (Math.abs(currentX - xOffset) > 3 || Math.abs(currentY - yOffset) > 3) {
+          hasDragged = true;
+        }
+
+        const boardRect = board.getBoundingClientRect();
+        const cardRect = card.getBoundingClientRect();
+
+        if (currentX < 0) currentX = 0;
+        if (currentX > boardRect.width - cardRect.width) currentX = boardRect.width - cardRect.width;
+        if (currentY < 0) currentY = 0;
+        if (currentY > boardRect.height - cardRect.height) currentY = boardRect.height - cardRect.height;
+
+        xOffset = currentX;
+        yOffset = currentY;
+
+        card.style.left = `${currentX}px`;
+        card.style.top = `${currentY}px`;
+      }
+
+      function dragEnd() {
+        if (!active) return;
+        active = false;
+        card.style.zIndex = "auto";
+
+        const boardRect = board.getBoundingClientRect();
+        
+        const finalXPct = (xOffset / boardRect.width) * 100;
+        const finalYPct = (yOffset / boardRect.height) * 100;
+
+        postData.x = finalXPct;
+        postData.y = finalYPct;
+        
+        const targetPost = answerDatabase.find(p => p.id === postData.id);
+        if (targetPost) {
+          targetPost.x = finalXPct;
+          targetPost.y = finalYPct;
+          saveToStorage(answerDatabase); 
+        }
+
+        if (!hasDragged) {
+          openDetailModal(postData.id);
+        }
+
+        card.classList.add(`animate-float-${postData.animType}`);
+      }
+    }
+
+    function openDetailModal(id) {
+      initAudio();
+      const post = answerDatabase.find(p => p.id === id);
+      if (!post) return;
+
+      currentDetailId = id;
+      document.getElementById('detailEmoji').textContent = post.emoji;
+      document.getElementById('detailAuthor').textContent = post.nickname;
+      document.getElementById('detailLikeCount').textContent = post.likes;
+
+      const contentArea = document.getElementById('detailContentArea');
+      contentArea.innerHTML = '';
+
+      const items = [
+        { label: "獲得種別", val: post.category },
+        { label: "お客様種別", val: post.userType },
+        { label: "固定状況", val: post.status },
+        { label: "来店目的", val: post.purpose },
+        { label: "トーク例", val: post.talkExample, fullWidth: true }
+      ];
+
+      items.forEach(item => {
+        if (!item.val) return;
+        const div = document.createElement('div');
+        if (item.fullWidth) {
+          div.className = "bg-sky-50/60 p-2 rounded-xl border border-sky-100 mt-1";
+          div.innerHTML = `<span class="block text-[9px] font-bold text-sky-700 mb-0.5">${item.label}</span><p class="text-gray-800 whitespace-pre-wrap font-medium leading-relaxed">${item.val}</p>`;
+        } else {
+          div.className = "bg-sky-50/40 p-1.5 rounded-lg border border-sky-100/70";
+          div.innerHTML = `<span class="block text-[8px] font-bold text-sky-600">${item.label}</span><p class="text-gray-800 font-semibold">${item.val}</p>`;
+        }
+        contentArea.appendChild(div);
+      });
+
+      document.getElementById('detailModal').classList.remove('hidden');
+    }
+
+    function executeLike() {
+      const post = answerDatabase.find(p => p.id === currentDetailId);
+      if (!post) return;
+
+      post.likes++;
+      saveToStorage(answerDatabase);
+      document.getElementById('detailLikeCount').textContent = post.likes;
+      playPopSound();
+    }
+
+    function clickDeleteBtn() {
+      document.getElementById('keypadDisplay').textContent = "____";
+      keypadInputValue = "";
+      document.getElementById('keypadError').classList.add('hidden');
+      document.getElementById('keypadModal').classList.remove('hidden');
+    }
+
+    function pressKey(key) {
+      const display = document.getElementById('keypadDisplay');
+      const errorDiv = document.getElementById('keypadError');
+      errorDiv.classList.add('hidden');
+
+      if (key === 'C') {
+        keypadInputValue = "";
+      } else if (key === 'OK') {
+        const post = answerDatabase.find(p => p.id === currentDetailId);
+        if (!post) return;
+
+        if (keypadInputValue === post.deleteKey || keypadInputValue === ADMIN_MASTER_KEY) {
+          answerDatabase = answerDatabase.filter(p => p.id !== currentDetailId);
+          saveToStorage(answerDatabase);
+          renderBoard();
+          document.getElementById('keypadModal').classList.add('hidden');
+          document.getElementById('detailModal').classList.add('hidden');
+        } else {
+          errorDiv.classList.remove('hidden');
+          keypadInputValue = "";
+        }
+      } else {
+        if (keypadInputValue.length < 4) {
+          keypadInputValue += key;
+        }
+      }
+
+      let dots = keypadInputValue;
+      while (dots.length < 4) dots += "_";
+      display.textContent = dots;
+    }
+  </script>
+</body>
+</html>
