@@ -389,7 +389,7 @@
       renderBoard();
     }
 
-    // 🔔 リアルタイム同期（他端末が投稿・移動・削除したら1秒で自動反映）
+    // 🔔 リアルタイム同期
     function setupRealtimeListener() {
       supabase
         .channel('schema-db-changes')
@@ -412,12 +412,21 @@
         if (e.key === 'Enter') checkGatePassword();
       });
 
-      // 起動プロセス
-      loadFromDatabase();
-      setupRealtimeListener();
+      // ⚙️ 起動プロセス（通信エラー時にボタンが無効化する問題を対策）
+      (async () => {
+        try {
+          await loadFromDatabase();
+          setupRealtimeListener();
+        } catch (e) {
+          console.error("データベース初期化エラー。サンプルデータを使用します:", e);
+          answerDatabase = [...defaultAnswers];
+          renderBoard();
+        }
+        
+        // データベース接続が落ちていても、入力フォームや各種ボタンのイベントは100%登録する
+        setupFormOptions();
+      })();
       
-      setupFormOptions();
-
       document.getElementById('muteBtn').addEventListener('click', toggleMute);
       document.getElementById('muteBtnMob').addEventListener('click', toggleMute);
       
@@ -449,6 +458,7 @@
 
     function setupFormOptions() {
       const emojiSelector = document.getElementById('emojiSelector');
+      if (!emojiSelector) return;
       emojiSelector.innerHTML = '';
       emojis.forEach((emoji, index) => {
         const btn = document.createElement('button');
@@ -464,6 +474,7 @@
       });
 
       const colorSelector = document.getElementById('colorSelector');
+      if (!colorSelector) return;
       colorSelector.innerHTML = '';
       Object.keys(colorPalettes).forEach((color, index) => {
         const btn = document.createElement('button');
@@ -539,8 +550,10 @@
 
       const { error } = await supabase.from('posts').insert([newPost]);
       if (error) {
-        alert("空へ飛ばせませんでした…エラーを確認してください");
-        console.error(error);
+        alert("現在データベースがオフラインのため、一時的にローカルにのみ保存します…☁️");
+        answerDatabase.push(newPost);
+        renderBoard();
+        document.getElementById('postModal').classList.add('hidden');
         return;
       }
       
@@ -640,7 +653,6 @@
         card.style.top = `${currentY}px`;
       }
 
-      // 📍 ドラッグ移動後の位置をリアルタイムにSupabaseへ上書き保存
       async function dragEnd() {
         if (!active) return;
         active = false;
@@ -695,7 +707,6 @@
       document.getElementById('detailModal').classList.remove('hidden');
     }
 
-    // ❤️ いいね数を同期保存
     async function executeLike() {
       const post = answerDatabase.find(p => p.id === currentDetailId);
       if (!post) return;
@@ -707,6 +718,10 @@
         post.likes = newLikes;
         document.getElementById('detailLikeCount').textContent = newLikes;
         playPopSound();
+      } else {
+        // オフラインでもいいね数だけ増やす
+        post.likes = newLikes;
+        document.getElementById('detailLikeCount').textContent = newLikes;
       }
     }
 
@@ -717,7 +732,6 @@
       document.getElementById('keypadModal').classList.remove('hidden');
     }
 
-    // 🗑 指定の投稿をSupabaseから安全に削除
     async function pressKey(key) {
       const display = document.getElementById('keypadDisplay');
       const errorDiv = document.getElementById('keypadError');
@@ -732,12 +746,11 @@
         if (keypadInputValue === post.deleteKey || keypadInputValue === ADMIN_MASTER_KEY) {
           const { error } = await supabase.from('posts').delete().eq('id', currentDetailId);
           
-          if (!error) {
-            answerDatabase = answerDatabase.filter(p => p.id !== currentDetailId);
-            renderBoard();
-            document.getElementById('keypadModal').classList.add('hidden');
-            document.getElementById('detailModal').classList.add('hidden');
-          }
+          // 通信成否に関わらず画面からは削除する
+          answerDatabase = answerDatabase.filter(p => p.id !== currentDetailId);
+          renderBoard();
+          document.getElementById('keypadModal').classList.add('hidden');
+          document.getElementById('detailModal').classList.add('hidden');
         } else {
           errorDiv.classList.remove('hidden');
           keypadInputValue = "";
