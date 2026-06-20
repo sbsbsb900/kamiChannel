@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>神Ch掲示板 ☁️</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Nunito"', 'system-ui', '-apple-system', 'sans-serif'],
+            pop: ['"Mochiy Pop One"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      overscroll-behavior: none;
+      background: linear-gradient(180deg, #b5d2ff 0%, #d2f1ff 100%);
+    }
+
+    #gatekeeperOverlay {
+      background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%);
+    }
+
+    .gpu-accelerated {
+      transform: translate3d(0, 0, 0);
+      will-change: transform, opacity;
+      backface-visibility: hidden;
+    }
+
+    /* ふわふわアニメーション */
+    @keyframes float-slow {
+      0%, 100% { transform: translateY(0px) rotate(-0.5deg); }
+      50% { transform: translateY(-8px) rotate(0.5deg); }
+    }
+    @keyframes float-mid {
+      0%, 100% { transform: translateY(0px) rotate(0.8deg); }
+      50% { transform: translateY(-14px) rotate(-0.8deg); }
+    }
+    @keyframes float-fast {
+      0%, 100% { transform: translateY(0px) rotate(-1deg); }
+      50% { transform: translateY(-20px) rotate(1deg); }
+    }
+    .animate-float-1 { animation: float-slow 6.5s ease-in-out infinite; }
+    .animate-float-2 { animation: float-mid 4.8s ease-in-out infinite; }
+    .animate-float-3 { animation: float-fast 5.5s ease-in-out infinite; }
+
+    @keyframes drift {
+      from { transform: translate3d(-20%, 0, 0); }
+      to { transform: translate3d(120%, 0, 0); }
+    }
+    .drift-cloud-1 { animation: drift 140s linear infinite; }
+    .drift-cloud-2 { animation: drift 190s linear infinite; delay: -40s; }
+
+    /* ドラッグ操作を最優先 */
+    button, .answer-cloud-card {
+      touch-action: none; 
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.25); border-radius: 10px; }
+
+    .keypad-btn { background-color: #f3f4f6; border-bottom: 3px solid #d1d5db; font-size: 0.95rem; font-weight: 600; color: #374151; padding: 0.35rem 0; border-radius: 0.5rem; cursor: pointer; }
+    .keypad-btn:active { transform: translateY(2px); border-bottom-width: 1px; }
+    .keypad-btn-action { font-size: 0.7rem; padding: 0.35rem 0; border-radius: 0.5rem; border-bottom: 3px solid rgba(0,0,0,0.15); cursor: pointer; }
+    .keypad-btn-action:active { transform: translateY(2px); border-bottom-width: 1px; }
+  </style>
+</head>
+<body class="w-full relative select-none">
+
+  <div id="toastContainer" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[999] flex flex-col gap-2 pointer-events-none w-full max-w-xs px-4"></div>
+
+  <div id="gatekeeperOverlay" class="fixed inset-0 z-[100] flex items-center justify-center p-4 hidden">
+    <div class="bg-white/90 backdrop-blur-md rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center space-y-4 border border-white">
+      <div class="w-16 h-16 bg-sky-500 rounded-full flex items-center justify-center text-white text-2xl mx-auto shadow-lg animate-bounce">
+        <i class="fas fa-lock"></i>
+      </div>
+      <div>
+        <h2 class="font-pop text-sm text-sky-800 tracking-wider">ひみつの空ひろば</h2>
+        <p class="text-[10px] text-sky-600 font-medium mt-1">ここから先はパスワードが必要です🔑</p>
+      </div>
+      <div class="space-y-2">
+        <input type="password" id="gatePassInput" placeholder="パスワードを入力" class="w-full text-center px-4 py-2.5 rounded-xl border-2 border-sky-200 outline-none focus:border-sky-400 text-sky-800 font-semibold text-xs tracking-widest shadow-inner">
+        <p id="gateErrorMsg" class="text-[10px] text-rose-500 font-semibold hidden">パスワードが違うよ！🥺</p>
+      </div>
+      <button id="gateSubmitBtn" class="w-full py-2.5 bg-gradient-to-r from-sky-400 to-blue-500 text-white font-semibold rounded-xl shadow-md border-b-2 border-blue-600 text-xs active:scale-98">
+        ひろばに入る！
+      </button>
+    </div>
+  </div>
+
+  <div id="mainContent" class="absolute inset-0 z-10 w-full h-full flex flex-col p-3 box-border transition-opacity duration-500">
+    
+    <div class="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+      <div class="drift-cloud-1 absolute top-8 left-[-300px] w-[260px] h-[80px] bg-white/30 rounded-full"></div>
+      <div class="drift-cloud-2 absolute top-1/3 left-[-400px] w-[320px] h-[90px] bg-white/20 rounded-full"></div>
+    </div>
+
+    <header class="w-full max-w-4xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white/85 rounded-2xl p-3 shadow-md border border-white/60 flex-shrink-0">
+      <div class="flex items-center justify-between sm:justify-start gap-2.5">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-sky-400 rounded-xl flex items-center justify-center text-white text-base shadow-sm transform rotate-[-2deg]">☁️</div>
+          <div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <h1 class="font-pop text-xs md:text-sm text-sky-700 tracking-wider font-normal">神Ch掲示板</h1>
+              <button id="syncBadge" class="text-[8px] px-1.5 py-0.5 rounded-full font-semibold transition-all duration-300 bg-amber-100 text-amber-700 border border-amber-200 cursor-pointer hover:scale-105 active:scale-95 flex items-center gap-1">
+                <i class="fas fa-circle-notch animate-spin"></i>接続確認中
+              </button>
+            </div>
+            <p class="text-[9px] text-sky-600/80 font-medium">みんなの投稿が空に浮かぶよ！指で動かせるよ👇</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 sm:hidden">
+          <button id="muteBtnMob" class="w-7 h-7 rounded-lg bg-white text-rose-500 border border-sky-100 shadow-sm flex items-center justify-center active:scale-90">
+            <i class="fas fa-volume-mute"></i>
+          </button>
+          <button id="helpOpenBtnMob" class="w-7 h-7 rounded-lg bg-sky-500 text-white shadow-md flex items-center justify-center active:scale-90">
+            <i class="fas fa-question text-xs"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between sm:justify-end gap-2 flex-wrap">
+        <div class="text-[9px] md:text-xs font-semibold text-sky-900 bg-sky-50 px-2.5 py-1.5 rounded-xl border border-sky-100 shadow-xs">
+          空の投稿: <span id="answerCount" class="text-sky-600 font-bold">0</span> 個
+        </div>
+        
+        <button id="postOpenBtn" class="bg-gradient-to-r from-pink-400 via-pink-500 to-rose-400 text-white font-semibold text-[10px] md:text-xs px-3 py-2 rounded-xl shadow-md border-b-[3px] border-pink-600 active:scale-95 flex items-center gap-1 z-20">
+          <i class="fas fa-paper-plane text-[8px]"></i>
+          <span>投稿を浮かべる！</span>
+        </button>
+
+        <div class="hidden sm:flex items-center gap-1.5">
+          <button id="muteBtn" class="w-7 h-7 rounded-lg bg-white text-rose-500 border border-sky-100 shadow-sm flex items-center justify-center active:scale-90">
+            <i class="fas fa-volume-mute"></i>
+          </button>
+          <button id="helpOpenBtn" class="w-7 h-7 rounded-lg bg-sky-500 text-white shadow-md flex items-center justify-center active:scale-90">
+            <i class="fas fa-question text-xs"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="skyBoard" class="relative flex-grow w-full my-3 overflow-hidden rounded-2xl border-2 border-dashed border-white/50 bg-sky-300/10">
+      <div id="welcomeMessage" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-sky-700/60 p-4 text-center">
+        <p class="text-xs font-semibold mb-1">☁️ 投稿の空へようこそ ☁️</p>
+        <p class="text-[9px] font-medium">まだ投稿が浮かんでいません。最初の投稿を飛ばしてみよう！</p>
+      </div>
+    </main>
+  </div>
+
+  <div id="postModal" class="fixed inset-0 bg-sky-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl w-full max-w-lg shadow-xl border-2 border-pink-200 overflow-hidden transform scale-95 flex flex-col max-h-[90vh]">
+      <div class="bg-gradient-to-r from-pink-300 to-rose-300 p-3 text-white flex justify-between items-center flex-shrink-0">
+        <h3 class="text-xs font-semibold flex items-center gap-2 text-rose-800"><i class="fas fa-cloud-upload-alt"></i> 投稿を浮かべる</h3>
+        <button id="postCloseBtn" class="w-7 h-7 rounded-full bg-white/50 text-rose-800 flex items-center justify-center"><i class="fas fa-times text-xs"></i></button>
+      </div>
+      <div class="p-4 space-y-3 overflow-y-auto flex-grow text-xs">
+        <div>
+          <label class="block text-[10px] font-semibold text-sky-800 mb-0.5">名前</label>
+          <input type="text" id="nicknameInput" maxlength="12" placeholder="おなまえ" class="w-full px-3 py-1.5 rounded-lg border-2 border-sky-100 outline-none focus:border-pink-300 text-sky-800 bg-sky-50/50">
+        </div>
+        <div>
+          <label class="block text-[10px] font-semibold text-sky-800 mb-0.5">アイコン（どうぶつ）</label>
+          <div class="flex gap-1.5 flex-wrap max-h-20 overflow-y-auto p-1 bg-sky-50/30 rounded-lg" id="emojiSelector"></div>
+          <input type="hidden" id="selectedEmoji" value="🐱">
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-sky-50/50 p-3 rounded-xl border border-sky-100">
+          <div>
+            <label class="block text-[9px] font-semibold text-sky-800 mb-0.5">獲得種別</label>
+            <input type="text" id="categoryInput" maxlength="20" placeholder="例：機種変更" class="w-full px-2 py-1.5 rounded-lg border border-sky-100 outline-none focus:border-pink-300 text-sky-800 bg-white text-[11px]">
+          </div>
+          <div>
+            <label class="block text-[9px] font-semibold text-sky-800 mb-0.5">お客様種別</label>
+            <input type="text" id="userTypeInput" maxlength="20" placeholder="例：ファミリー層" class="w-full px-2 py-1.5 rounded-lg border border-sky-100 outline-none focus:border-pink-300 text-sky-800 bg-white text-[11px]">
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-[9px] font-semibold text-sky-800 mb-0.5">固定状況</label>
+            <input type="text" id="statusInput" maxlength="30" placeholder="例：未利用、CATVなど" class="w-full px-2 py-1.5 rounded-lg border border-sky-100 outline-none focus:border-pink-300 text-sky-800 bg-white text-[11px]">
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-[9px] font-semibold text-sky-800 mb-0.5">来店目的</label>
+            <input type="text" id="purposeInput" maxlength="45" placeholder="例：プラン相談など" class="w-full px-2 py-1.5 rounded-lg border border-sky-100 outline-none focus:border-pink-300 text-sky-800 bg-white text-[11px]">
+          </div>
+        </div>
+        <div>
+          <label class="block text-[10px] font-semibold text-sky-800 mb-0.5">トーク例</label>
+          <textarea id="talkExampleInput" maxlength="150" rows="3" placeholder="接客やアプローチの実際のフレーズなど" class="w-full px-3 py-1.5 rounded-lg border-2 border-sky-100 outline-none focus:border-pink-300 text-sky-800 bg-sky-50/50 resize-none text-[11px]"></textarea>
+        </div>
+        <div>
+          <label class="block text-[10px] font-semibold text-sky-800 mb-0.5">雲の色</label>
+          <div class="flex gap-2" id="colorSelector"></div>
+          <input type="hidden" id="selectedColor" value="pink">
+        </div>
+        <div class="bg-amber-50/70 p-2.5 rounded-xl border border-amber-200">
+          <label class="block text-[9px] font-semibold text-amber-800 mb-0.5">ひみつのカギ🔑（削除用の4桁）</label>
+          <div class="flex items-center gap-2">
+            <input type="text" id="deleteKeyInput" pattern="[0-9]{4}" maxlength="4" placeholder="1234" class="w-16 text-center px-1.5 py-1 rounded-md border border-amber-200 outline-none focus:border-amber-300 font-semibold text-amber-800 bg-white text-xs">
+          </div>
+        </div>
+        <button id="postSubmitBtn" type="button" class="w-full py-2.5 bg-gradient-to-r from-pink-400 to-rose-400 text-white font-semibold rounded-lg shadow border-b-2 border-pink-600 flex items-center justify-center gap-1 text-[11px] cursor-pointer">
+          <i class="fas fa-cloud-upload-alt"></i><span>空へリリースする！</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="detailModal" class="fixed inset-0 bg-sky-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden">
+    <div id="detailCard" class="bg-white rounded-2xl w-full max-w-md shadow-xl p-4 border-2 border-sky-300 relative flex flex-col max-h-[85vh]">
+      <button id="detailCloseBtn" class="absolute top-3 right-3 w-7 h-7 rounded-full bg-sky-100 text-sky-800 flex items-center justify-center z-10"><i class="fas fa-times text-xs"></i></button>
+      <div class="overflow-y-auto space-y-3 pt-2 pr-1 text-[11px] md:text-xs">
+        <div class="text-center space-y-1">
+          <div id="detailEmoji" class="text-3xl animate-bounce">🐱</div>
+          <div><span class="bg-sky-100 text-sky-800 font-semibold text-[9px] px-2.5 py-0.5 rounded-full" id="detailAuthor">ななし</span></div>
+        </div>
+        <div id="detailContentArea" class="space-y-2"></div>
+        <div class="border-t border-sky-100 my-2"></div>
+        <div class="flex flex-col items-center gap-1 text-center">
+          <button id="detailLikeBtn" class="flex items-center gap-1 bg-rose-500 text-white font-semibold px-4 py-1.5 rounded-full shadow border-b-2 border-rose-700 text-[10px]">
+            <i class="fas fa-heart text-[8px]"></i><span>キュン！ <span id="detailLikeCount" class="font-bold">0</span></span>
+          </button>
+        </div>
+        <div class="pt-1 mt-2 border-t border-dashed border-sky-100 flex flex-col items-center">
+          <button id="deleteBtn" class="text-[9px] font-medium text-gray-400 hover:text-rose-500 flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-rose-50">
+            <i class="fas fa-trash-alt text-[9px]"></i><span id="deleteBtnText">この投稿を削除する</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="keypadModal" class="fixed inset-0 bg-sky-900/40 backdrop-blur-md z-[60] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl w-full max-w-xs shadow-xl border-2 border-amber-300 p-4 text-center space-y-3">
+      <div class="flex justify-between items-center">
+        <h4 class="text-[10px] text-amber-800 flex items-center gap-1 font-semibold"><i class="fas fa-key text-[9px]"></i> ひみつのカギ解除🔑</h4>
+        <button id="keypadCloseBtn" class="w-6 h-6 rounded-full bg-amber-50 text-amber-800 flex items-center justify-center"><i class="fas fa-times text-[9px]"></i></button>
+      </div>
+      <div class="bg-amber-50 border border-amber-200 rounded-lg py-1.5 px-3 relative">
+        <span id="keypadDisplay" class="font-semibold text-base tracking-[0.5em] text-amber-900 block pl-3">____</span>
+        <div id="keypadError" class="absolute inset-0 bg-rose-500 text-white font-medium text-[10px] flex items-center justify-center rounded-lg hidden">カギが違うよ！🥺</div>
+      </div>
+      <div class="grid grid-cols-3 gap-1.5 text-xs" id="keypadGrid">
+        <button type="button" class="keypad-btn" data-key="1">1</button>
+        <button type="button" class="keypad-btn" data-key="2">2</button>
+        <button type="button" class="keypad-btn" data-key="3">3</button>
+        <button type="button" class="keypad-btn" data-key="4">4</button>
+        <button type="button" class="keypad-btn" data-key="5">5</button>
+        <button type="button" class="keypad-btn" data-key="6">6</button>
+        <button type="button" class="keypad-btn" data-key="7">7</button>
+        <button type="button" class="keypad-btn" data-key="8">8</button>
+        <button type="button" class="keypad-btn" data-key="9">9</button>
+        <button type="button" class="keypad-btn-action bg-rose-100 text-rose-700 font-semibold" data-key="C">C</button>
+        <button type="button" class="keypad-btn" data-key="0">0</button>
+        <button type="button" class="keypad-btn-action bg-emerald-400 text-white font-semibold" data-key="OK">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="helpModal" class="fixed inset-0 bg-sky-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl w-full max-w-md shadow-xl p-4 border-2 border-sky-300 text-xs">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="text-xs text-sky-700 flex items-center gap-1.5 font-semibold"><i class="fas fa-info-circle"></i> 遊びかた</h3>
+        <button id="helpCloseBtn" class="w-7 h-7 rounded-full bg-sky-100 text-sky-800 flex items-center justify-center"><i class="fas fa-times text-xs"></i></button>
+      </div>
+      <div class="space-y-2 text-sky-800 font-medium leading-relaxed max-h-[50vh] overflow-y-auto">
+        <p>🌤️ <strong>1. 投稿を見てみよう</strong><br>空に浮いている雲カードをクリックすると詳細情報を見ることができます。</p>
+        <p>👉 <strong>2. 雲を指で動かそう</strong><br>スマホの画面上で雲を指でスライドすると好きな場所に移動できます！</p>
+        <p>💖 <strong>3. いいね！を送ろう</strong><br>素敵なトーク術には「いいね！」（キュン！）を押して応援しましょう。</p>
+        <p>🔑 <strong>4. 投稿の削除制限</strong><br>投稿を消すときは、設定した「ひみつのカギ🔑」を入力してください。</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="firebaseConfigModal" class="fixed inset-0 bg-sky-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl border-2 border-sky-300 overflow-hidden transform scale-95 flex flex-col max-h-[90vh]">
+      <div class="bg-gradient-to-r from-sky-400 to-blue-500 p-3 text-white flex justify-between items-center flex-shrink-0">
+        <h3 class="text-xs font-semibold flex items-center gap-1.5"><i class="fas fa-cog"></i> Supabase 同期設定</h3>
+        <button id="firebaseConfigCloseBtn" class="w-7 h-7 rounded-full bg-white/30 text-white flex items-center justify-center"><i class="fas fa-times text-xs"></i></button>
+      </div>
+      <div class="p-4 space-y-3 overflow-y-auto flex-grow text-xs text-sky-900">
+        <p class="text-[10px] leading-relaxed bg-sky-50 p-2.5 rounded-lg border border-sky-100 font-medium text-sky-800">
+          <i class="fas fa-info-circle mr-1 text-sky-500"></i>
+          ご自身の Supabase プロジェクトの接続情報を入力してください。設定するとリアルタイム共有モードが有効になります！
+        </p>
+        
+        <div class="space-y-3">
+          <div>
+            <label class="block text-[10px] font-bold mb-0.5">Project URL</label>
+            <input type="text" id="sbUrl" placeholder="https://xxxx.supabase.co" class="w-full p-2 rounded border border-sky-200 outline-none focus:border-sky-400 bg-white font-mono text-[11px]">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold mb-0.5">API Key (anon public)</label>
+            <input type="text" id="sbAnonKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." class="w-full p-2 rounded border border-sky-200 outline-none focus:border-sky-400 bg-white font-mono text-[10px]">
+          </div>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button id="saveFbConfigBtn" class="flex-1 py-2 bg-gradient-to-r from-sky-400 to-blue-500 text-white font-semibold rounded-lg shadow-md hover:from-sky-500 hover:to-blue-600 active:scale-98">
+            接続を保存して再起動
+          </button>
+          <button id="clearFbConfigBtn" class="px-3 py-2 bg-rose-50 text-rose-600 font-semibold border border-rose-200 rounded-lg hover:bg-rose-100 active:scale-98">
+            クリア
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+    // ----------------------------------------
+    // 初期設定とシステム変数
+    // ----------------------------------------
+    const ADMIN_MASTER_KEY = "0917";      
+    let isMuted = true;
+    let audioCtx = null;
+    let currentDetailId = null;
+    let keypadInputValue = "";
+    let draggingCardId = null; 
+    let supabaseRealtimeChannel = null; // リアルタイム監視用
+
+    let supabase = null;
+    let isCloudMode = false;
+
+    // ----------------------------------------
+    // 音声効果音システム
+    // ----------------------------------------
+    const initAudio = () => {
+      if (isMuted) return;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+      } catch (e) {}
+    };
+
+    const playPopSound = () => {
+      if (isMuted || !audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(320, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.12);
+      } catch (e) {}
+    };
+
+    const toggleMute = () => {
+      isMuted = !isMuted;
+      const syncMuteBtns = () => {
+        [document.getElementById('muteBtn'), document.getElementById('muteBtnMob')].forEach(btn => {
+          if (!btn) return;
+          if (isMuted) {
+            btn.innerHTML = '<i class="fas fa-volume-mute"></i>';
+            btn.className = "w-7 h-7 rounded-lg bg-white text-rose-500 border border-sky-100 shadow-sm flex items-center justify-center active:scale-90";
+          } else {
+            btn.innerHTML = '<i class="fas fa-volume-up"></i>';
+            btn.className = "w-7 h-7 rounded-lg bg-white text-sky-600 border border-sky-100 shadow-sm flex items-center justify-center active:scale-90";
+          }
+        });
+      };
+      syncMuteBtns();
+      if (!isMuted) {
+        initAudio();
+        setTimeout(() => playPopSound(), 50);
+      }
+    };
+
+    // ----------------------------------------
+    // カスタム通知トースト
+    // ----------------------------------------
+    const showToast = (message, type = "success") => {
+      const container = document.getElementById("toastContainer");
+      if (!container) return;
+
+      const toast = document.createElement("div");
+      toast.className = `px-4 py-2.5 rounded-xl shadow-lg border text-[11px] font-semibold text-sky-900 transition-all duration-300 transform translate-y-4 opacity-0 flex items-center gap-2 max-w-xs ${
+        type === "error" 
+          ? "bg-rose-50 border-rose-200 text-rose-800" 
+          : "bg-white/95 backdrop-blur-md border-sky-100"
+      }`;
+
+      const icon = type === "error" ? "fa-exclamation-circle text-rose-500" : "fa-cloud text-sky-500 animate-bounce";
+      toast.innerHTML = `<i class="fas ${icon}"></i> <span>${message}</span>`;
+
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.remove("translate-y-4", "opacity-0");
+      }, 50);
+
+      setTimeout(() => {
+        toast.classList.add("translate-y-2", "opacity-0");
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    };
+
+    // ----------------------------------------
+    // データスキーマ & 初期値
+    // ----------------------------------------
+    let answerDatabase = [];
+    const colorPalettes = {
+      pink: { bg: "bg-pink-50/95", border: "border-pink-200", text: "text-pink-700", shadow: "shadow-pink-100" },
+      blue: { bg: "bg-sky-50/95", border: "border-sky-200", text: "text-sky-700", shadow: "shadow-sky-100" },
+      yellow: { bg: "bg-amber-50/95", border: "border-amber-200", text: "text-amber-700", shadow: "shadow-amber-100" },
+      purple: { bg: "bg-purple-50/95", border: "border-purple-200", text: "text-purple-700", shadow: "shadow-purple-100" },
+      green: { bg: "bg-emerald-50/95", border: "border-emerald-200", text: "text-emerald-700", shadow: "shadow-emerald-100" }
+    };
+    const emojis = ["🐱", "🐶", "🐰", "🦊", "🐻", "🐼", "🐨", "🦁", "🐯", "🐹", "🐸", "🐵", "🐧", "🐦", "🐥"];
+
+    const defaultAnswers = [
+      {
+        id: "default-1",
+        nickname: "かなパイセン",
+        emoji: "🦊",
+        category: "機種変更",
+        userType: "シニア層",
+        status: "ガラケー利用（他社）",
+        purpose: "操作の相談",
+        talkExample: "「今のスマホ、毎月の料金どれくらいかご存知ですか？実は今のプランのまま安くできるチャンスがあるんですよ😊」",
+        color: "blue",
+        deleteKey: "1111",
+        likes: 12,
+        x: 10,
+        y: 20,
+        animType: 1
+      },
+      {
+        id: "default-2",
+        nickname: "エース岡田",
+        emoji: "🐻",
+        category: "新規契約",
+        userType: "20代単身",
+        status: "アパート一人暮らし",
+        purpose: "ネットの速度相談",
+        talkExample: "「工事不要でコンセントに挿すだけのWi-Fiなら、今日からすぐYouTubeもゲームもサウザク使い放題になりますよ！🚀」",
+        color: "pink",
+        deleteKey: "2222",
+        likes: 24,
+        x: 45,
+        y: 35,
+        animType: 2
+      },
+      {
+        id: "default-3",
+        nickname: "マネージャー",
+        emoji: "🐰",
+        category: "料金見直し",
+        userType: "ファミリー層",
+        status: "家族4人（他社回線）",
+        purpose: "固定費を下げたい",
+        talkExample: "「ご家族全員のスマホと、お家のネットをセットにまとめるだけで、毎月映画1本分以上の節約になります！🎬」",
+        color: "green",
+        deleteKey: "3333",
+        likes: 18,
+        x: 25,
+        y: 60,
+        animType: 3
+      }
+    ];
+
+    // ----------------------------------------
+    // ローカルストレージ制御
+    // ----------------------------------------
+    const loadLocalData = () => {
+      try {
+        const saved = localStorage.getItem('sky_answers_db');
+        if (saved && JSON.parse(saved).length > 0) {
+          answerDatabase = JSON.parse(saved);
+        } else {
+          answerDatabase = [...defaultAnswers];
+          saveToLocalStorage();
+        }
+      } catch (e) {
+        answerDatabase = [...defaultAnswers];
+      }
+      renderBoard();
+    };
+
+    const saveToLocalStorage = () => {
+      try {
+        localStorage.setItem('sky_answers_db', JSON.stringify(answerDatabase));
+      } catch(e) {}
+    };
+
+    // ----------------------------------------
+    // Supabase初期化とリアルタイム同期
+    // ----------------------------------------
+    const startSupabase = async () => {
+      // 既存の接続があれば一度切断する
+      if (supabaseRealtimeChannel) {
+        supabase.removeChannel(supabaseRealtimeChannel);
+        supabaseRealtimeChannel = null;
+      }
+
+      let activeConfig = null;
+      try {
+        const saved = localStorage.getItem('custom_supabase_config');
+        if (saved) activeConfig = JSON.parse(saved);
+      } catch(e) {}
+
+      if (!activeConfig || !activeConfig.url || !activeConfig.anonKey) {
+        setOfflineMode("ローカル保存");
+        return;
+      }
+
+      updateSyncBadgeState("loading", "接続試行中...");
+
+      try {
+        supabase = createClient(activeConfig.url, activeConfig.anonKey);
+        isCloudMode = true;
+        updateSyncBadgeState("online", "同期中 ☁️");
+        
+        // 初回データ読み込み
+        await fetchCloudData();
+        // リアルタイムリスナー起動
+        initRealtimeSync();
+      } catch (e) {
+        console.error(e);
+        setOfflineMode("接続エラー");
+        showToast("Supabaseへの接続に失敗しました。", "error");
+      }
+    };
+
+    const setOfflineMode = (reason) => {
+      isCloudMode = false;
+      updateSyncBadgeState("offline", reason);
+      loadLocalData();
+    };
+
+    const updateSyncBadgeState = (status, text) => {
+      const badge = document.getElementById("syncBadge");
+      if (!badge) return;
+
+      if (status === "online") {
+        badge.className = "text-[8px] px-1.5 py-0.5 rounded-full font-semibold transition-all duration-300 bg-emerald-100 text-emerald-700 border border-emerald-200 cursor-pointer hover:scale-105 active:scale-95 flex items-center gap-1";
+        badge.innerHTML = `<i class="fas fa-cloud-upload-alt text-emerald-500 mr-0.5 animate-pulse"></i>${text}`;
+      } else if (status === "loading") {
+        badge.className = "text-[8px] px-1.5 py-0.5 rounded-full font-semibold transition-all duration-300 bg-amber-100 text-amber-700 border border-amber-200 cursor-pointer hover:scale-105 active:scale-95 flex items-center gap-1";
+        badge.innerHTML = `<i class="fas fa-circle-notch animate-spin mr-0.5"></i>${text}`;
+      } else {
+        badge.className = "text-[8px] px-1.5 py-0.5 rounded-full font-semibold transition-all duration-300 bg-gray-100 text-gray-600 border border-gray-200 cursor-pointer hover:scale-105 active:scale-95 flex items-center gap-1";
+        badge.innerHTML = `<i class="fas fa-hdd mr-0.5"></i>${text}`;
+      }
+    };
+
+    const fetchCloudData = async () => {
+      if (!isCloudMode) return;
+      const { data, error } = await supabase.from('answers').select('*');
+      if (error) {
+        console.error("Fetch error:", error);
+        return;
+      }
+      if (data && data.length > 0) {
+        // カラム名をキャメルケースにマッピング
+        answerDatabase = data.map(item => mapFromSnakeCase(item));
+        renderBoard();
+      } else {
+        // クラウド側が空っぽなら初期データを投入
+        for (const ans of defaultAnswers) {
+          await supabase.from('answers').insert([mapToSnakeCase(ans)]);
+        }
+        answerDatabase = [...defaultAnswers];
+        renderBoard();
+      }
+    };
+
+    // Supabase(PostgreSQL)の変数を元のJS変数名に相互変換するヘルパー
+    const mapToSnakeCase = (obj) => ({
+      id: obj.id,
+      nickname: obj.nickname,
+      emoji: obj.emoji,
+      category: obj.category,
+      user_type: obj.userType,
+      status: obj.status,
+      purpose: obj.purpose,
+      talk_example: obj.talkExample,
+      color: obj.color,
+      delete_key: obj.deleteKey,
+      likes: obj.likes,
+      x: obj.x,
+      y: obj.y,
+      anim_type: obj.animType
+    });
+
+    const mapFromSnakeCase = (row) => ({
+      id: row.id,
+      nickname: row.nickname,
+      emoji: row.emoji,
+      category: row.category,
+      userType: row.user_type,
+      status: row.status,
+      purpose: row.purpose,
+      talkExample: row.talk_example,
+      color: row.color,
+      deleteKey: row.delete_key,
+      likes: row.likes,
+      x: row.x,
+      y: row.y,
+      animType: row.anim_type
+    });
+
+    const initRealtimeSync = () => {
+      if (!isCloudMode || !supabase) return;
+
+      supabaseRealtimeChannel = supabase.channel('schema-db-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'answers' }, (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newItem = mapFromSnakeCase(payload.new);
+            if (!answerDatabase.some(p => p.id === newItem.id)) {
+              answerDatabase.push(newItem);
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedItem = mapFromSnakeCase(payload.new);
+            answerDatabase = answerDatabase.map(item => {
+              if (item.id === updatedItem.id) {
+                // ドラッグ中の雲は手元の位置を最優先させてガタツキを防ぐ
+                if (item.id === draggingCardId) {
+                  return { ...updatedItem, x: item.x, y: item.y };
+                }
+                return updatedItem;
+              }
+              return item;
+            });
+          } else if (payload.eventType === 'DELETE') {
+            const deletedId = payload.old.id;
+            answerDatabase = answerDatabase.filter(item => item.id !== deletedId);
+          }
+          renderBoard();
+        })
+        .subscribe();
+    };
+
+    // ----------------------------------------
+    // データ永続化ヘルパー (Supabase or Local)
+    // ----------------------------------------
+    const postAnswer = async (newPost) => {
+      if (isCloudMode) {
+        const { error } = await supabase.from('answers').insert([mapToSnakeCase(newPost)]);
+        if (error) {
+          showToast("クラウドへの送信に失敗しました", "error");
+        } else {
+          showToast("投稿が空へふわふわ舞い上がりました！🎈");
+        }
+      } else {
+        answerDatabase.push(newPost);
+        saveToLocalStorage();
+        renderBoard();
+        showToast("ローカルに投稿を浮かべました！🎈");
+      }
+    };
+
+    const updatePosition = async (id, x, y) => {
+      const post = answerDatabase.find(p => p.id === id);
+      if (!post) return;
+      post.x = x;
+      post.y = y;
+
+      if (isCloudMode) {
+        await supabase.from('answers').update({ x, y }).eq('id', id);
+      } else {
+        saveToLocalStorage();
+      }
+    };
+
+    const incLike = async (id) => {
+      const post = answerDatabase.find(p => p.id === id);
+      if (!post) return;
+      post.likes = (post.likes || 0) + 1;
+
+      if (isCloudMode) {
+        await supabase.from('answers').update({ likes: post.likes }).eq('id', id);
+      } else {
+        saveToLocalStorage();
+        renderBoard();
+      }
+      playPopSound();
+    };
+
+    const removePost = async (id) => {
+      if (isCloudMode) {
+        const { error } = await supabase.from('answers').delete().eq('id', id);
+        if (error) {
+          showToast("投稿の削除に失敗しました", "error");
+        } else {
+          showToast("投稿を空からやさしく回収しました✨");
+        }
+      } else {
+        answerDatabase = answerDatabase.filter(p => p.id !== id);
+        saveToLocalStorage();
+        renderBoard();
+        showToast("ローカルから投稿を削除しました");
+      }
+    };
+
+    // ----------------------------------------
+    // UI レンダリング
+    // ----------------------------------------
+    const renderBoard = () => {
+      const board = document.getElementById('skyBoard');
+      const countSpan = document.getElementById('answerCount');
+      const welcome = document.getElementById('welcomeMessage');
+
+      document.querySelectorAll('.answer-cloud-card').forEach(el => el.remove());
+      countSpan.textContent = answerDatabase.length;
+
+      if (answerDatabase.length === 0) {
+        welcome.classList.remove('hidden');
+        return;
+      } else {
+        welcome.classList.add('hidden');
+      }
+
+      const sortedAnswers = [...answerDatabase].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+      sortedAnswers.forEach(post => {
+        const palette = colorPalettes[post.color] || colorPalettes.pink;
+        const card = document.createElement('div');
+        card.className = `answer-cloud-card gpu-accelerated absolute px-3 py-2 rounded-2xl border-2 ${palette.bg} ${palette.border} ${palette.shadow} shadow-md flex items-center gap-1.5 cursor-pointer max-w-[150px] md:max-w-[190px] animate-float-${post.animType}`;
+        card.style.left = `${post.x}%`;
+        card.style.top = `${post.y}%`;
+        
+        card.innerHTML = `
+          <span class="text-base flex-shrink-0 select-none pointer-events-none">${post.emoji}</span>
+          <div class="overflow-hidden select-none pointer-events-none">
+            <p class="text-[9px] font-bold ${palette.text} truncate">${post.nickname}</p>
+            <p class="text-[10px] font-medium text-gray-700 truncate">${post.talkExample}</p>
+          </div>
+        `;
+
+        setupDragElement(card, post);
+        board.appendChild(card);
+      });
+    };
+
+    // ドラッグ制御
+    const setupDragElement = (card, postData) => {
+      let active = false;
+      let currentX;
+      let currentY;
+      let initialX;
+      let initialY;
+      let xOffset = 0;
+      let yOffset = 0;
+      let hasDragged = false; 
+
+      const board = document.getElementById('skyBoard');
+
+      card.addEventListener('touchstart', dragStart, { passive: false });
+      card.addEventListener('touchend', dragEnd, { passive: true });
+      card.addEventListener('touchmove', drag, { passive: false });
+
+      card.addEventListener('mousedown', dragStart, { passive: false });
+      window.addEventListener('mouseup', dragEnd, { passive: true });
+      window.addEventListener('mousemove', drag, { passive: false });
+
+      function dragStart(e) {
+        initAudio();
+        hasDragged = false;
+        draggingCardId = postData.id; 
+        
+        card.classList.remove(`animate-float-${postData.animType}`);
+        card.style.zIndex = "40"; 
+
+        const boardRect = board.getBoundingClientRect();
+        const cardRect = card.getBoundingClientRect();
+
+        xOffset = cardRect.left - boardRect.left;
+        yOffset = cardRect.top - boardRect.top;
+
+        if (e.type === "touchstart") {
+          initialX = e.touches[0].clientX - xOffset;
+          initialY = e.touches[0].clientY - yOffset;
+        } else {
+          initialX = e.clientX - xOffset;
+          initialY = e.clientY - yOffset;
+        }
+
+        if (e.target === card || card.contains(e.target)) {
+          active = true;
+        }
+      }
+
+      function drag(e) {
+        if (!active) return;
+        e.preventDefault(); 
+
+        if (e.type === "touchmove") {
+          currentX = e.touches[0].clientX - initialX;
+          currentY = e.touches[0].clientY - initialY;
+        } else {
+          currentX = e.clientX - initialX;
+          currentY = e.clientY - initialY;
+        }
+
+        if (Math.abs(currentX - xOffset) > 4 || Math.abs(currentY - yOffset) > 4) {
+          hasDragged = true;
+        }
+
+        const boardRect = board.getBoundingClientRect();
+        const cardRect = card.getBoundingClientRect();
+
+        if (currentX < 0) currentX = 0;
+        if (currentX > boardRect.width - cardRect.width) currentX = boardRect.width - cardRect.width;
+        if (currentY < 0) currentY = 0;
+        if (currentY > boardRect.height - cardRect.height) currentY = boardRect.height - cardRect.height;
+
+        xOffset = currentX;
+        yOffset = currentY;
+
+        card.style.left = `${currentX}px`;
+        card.style.top = `${currentY}px`;
+      }
+
+      function dragEnd() {
+        if (!active) return;
+        active = false;
+        card.style.zIndex = "auto";
+
+        const boardRect = board.getBoundingClientRect();
+        const finalXPct = (xOffset / boardRect.width) * 100;
+        const finalYPct = (yOffset / boardRect.height) * 100;
+
+        updatePosition(postData.id, finalXPct, finalYPct);
+        draggingCardId = null;
+
+        if (!hasDragged) {
+          openDetailModal(postData.id);
+        }
+        card.classList.add(`animate-float-${postData.animType}`);
+      }
+    };
+
+    // ----------------------------------------
+    // 各種UI操作イベント
+    // ----------------------------------------
+    const setupFormOptions = () => {
+      const emojiSelector = document.getElementById('emojiSelector');
+      emojiSelector.innerHTML = '';
+      emojis.forEach((emoji, index) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `w-8 h-8 flex items-center justify-center text-lg rounded-lg border ${index === 0 ? 'border-pink-400 bg-pink-50' : 'border-gray-200 bg-white'}`;
+        btn.textContent = emoji;
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#emojiSelector button').forEach(b => b.className = 'w-8 h-8 flex items-center justify-center text-lg rounded-lg border border-gray-200 bg-white');
+          btn.className = 'w-8 h-8 flex items-center justify-center text-lg rounded-lg border border-pink-400 bg-pink-50';
+          document.getElementById('selectedEmoji').value = emoji;
+        });
+        emojiSelector.appendChild(btn);
+      });
+
+      const colorSelector = document.getElementById('colorSelector');
+      colorSelector.innerHTML = '';
+      Object.keys(colorPalettes).forEach((color, index) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        let bgClass = 'bg-pink-300';
+        if(color === 'blue') bgClass = 'bg-sky-300';
+        if(color === 'yellow') bgClass = 'bg-amber-300';
+        if(color === 'purple') bgClass = 'bg-purple-300';
+        if(color === 'green') bgClass = 'bg-emerald-300';
+
+        btn.className = `w-6 h-6 rounded-full ${bgClass} border-2 ${index === 0 ? 'border-gray-700 scale-110' : 'border-transparent'}`;
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#colorSelector button').forEach(b => b.classList.remove('border-gray-700', 'scale-110'));
+          btn.classList.add('border-gray-700', 'scale-110');
+          document.getElementById('selectedColor').value = color;
+        });
+        colorSelector.appendChild(btn);
+      });
+    };
+
+    const generateRandom4DigitKey = () => {
+      return Math.floor(1000 + Math.random() * 9000).toString();
+    };
+
+    const openPostModal = () => {
+      initAudio();
+      document.getElementById('nicknameInput').value = '';
+      document.getElementById('categoryInput').value = '';
+      document.getElementById('userTypeInput').value = '';
+      document.getElementById('statusInput').value = '';
+      document.getElementById('purposeInput').value = '';
+      document.getElementById('talkExampleInput').value = '';
+      document.getElementById('deleteKeyInput').value = generateRandom4DigitKey();
+      document.getElementById('postModal').classList.remove('hidden');
+    };
+
+    const executeSubmitAnswer = () => {
+      const nickname = document.getElementById('nicknameInput').value.trim() || "ななし";
+      const emoji = document.getElementById('selectedEmoji').value;
+      const category = document.getElementById('categoryInput').value.trim();
+      const userType = document.getElementById('userTypeInput').value.trim();
+      const status = document.getElementById('statusInput').value.trim();
+      const purpose = document.getElementById('purposeInput').value.trim();
+      const talkExample = document.getElementById('talkExampleInput').value.trim();
+      const color = document.getElementById('selectedColor').value;
+      const deleteKey = document.getElementById('deleteKeyInput').value.trim();
+
+      if (!talkExample) {
+        showToast("トーク例を入力してください！☁️", "error");
+        return;
+      }
+      if (!/^\d{4}$/.test(deleteKey)) {
+        showToast("ひみつのカギは4桁の数字で入力してください🔑", "error");
+        return;
+      }
+
+      const newPost = {
+        id: Date.now().toString(),
+        nickname,
+        emoji,
+        category,
+        userType,
+        status,
+        purpose,
+        talkExample,
+        color,
+        deleteKey,
+        likes: 0,
+        x: Math.random() * 60 + 5,
+        y: Math.random() * 55 + 15,
+        animType: Math.floor(Math.random() * 3) + 1
+      };
+
+      postAnswer(newPost);
+      document.getElementById('postModal').classList.add('hidden');
+      playPopSound();
+    };
+
+    const openDetailModal = (id) => {
+      initAudio();
+      const post = answerDatabase.find(p => p.id === id);
+      if (!post) return;
+
+      currentDetailId = id;
+      document.getElementById('detailEmoji').textContent = post.emoji;
+      document.getElementById('detailAuthor').textContent = post.nickname;
+      document.getElementById('detailLikeCount').textContent = post.likes || 0;
+
+      const contentArea = document.getElementById('detailContentArea');
+      contentArea.innerHTML = '';
+
+      const items = [
+        { label: "獲得種別", val: post.category },
+        { label: "お客様種別", val: post.userType },
+        { label: "固定状況", val: post.status },
+        { label: "来店目的", val: post.purpose },
+        { label: "トーク例", val: post.talkExample, fullWidth: true }
+      ];
+
+      items.forEach(item => {
+        if (!item.val) return;
+        const div = document.createElement('div');
+        if (item.fullWidth) {
+          div.className = "bg-sky-50/60 p-2 rounded-xl border border-sky-100 mt-1";
+          div.innerHTML = `<span class="block text-[9px] font-bold text-sky-700 mb-0.5">${item.label}</span><p class="text-gray-800 whitespace-pre-wrap font-medium leading-relaxed">${item.val}</p>`;
+        } else {
+          div.className = "bg-sky-50/40 p-1.5 rounded-lg border border-sky-100/70";
+          div.innerHTML = `<span class="block text-[8px] font-bold text-sky-600">${item.label}</span><p class="text-gray-800 font-semibold">${item.val}</p>`;
+        }
+        contentArea.appendChild(div);
+      });
+
+      document.getElementById('detailModal').classList.remove('hidden');
+    };
+
+    const executeLike = () => {
+      incLike(currentDetailId);
+      const post = answerDatabase.find(p => p.id === currentDetailId);
+      if (post) {
+        document.getElementById('detailLikeCount').textContent = post.likes;
+      }
+    };
+
+    const clickDeleteBtn = () => {
+      document.getElementById('keypadDisplay').textContent = "____";
+      keypadInputValue = "";
+      document.getElementById('keypadError').classList.add('hidden');
+      document.getElementById('keypadModal').classList.remove('hidden');
+    };
+
+    const pressKey = (key) => {
+      const display = document.getElementById('keypadDisplay');
+      const errorDiv = document.getElementById('keypadError');
+      errorDiv.classList.add('hidden');
+
+      if (key === 'C') {
+        keypadInputValue = "";
+      } else if (key === 'OK') {
+        const post = answerDatabase.find(p => p.id === currentDetailId);
+        if (!post) return;
+
+        if (keypadInputValue === post.deleteKey || keypadInputValue === ADMIN_MASTER_KEY) {
+          removePost(currentDetailId);
+          document.getElementById('keypadModal').classList.add('hidden');
+          document.getElementById('detailModal').classList.add('hidden');
+        } else {
+          errorDiv.classList.remove('hidden');
+          keypadInputValue = "";
+        }
+      } else {
+        if (keypadInputValue.length < 4) {
+          keypadInputValue += key;
+        }
+      }
+
+      let dots = keypadInputValue;
+      while (dots.length < 4) dots += "_";
+      display.textContent = dots;
+    };
+
+    // ----------------------------------------
+    // Supabase 設定モーダルの制御
+    // ----------------------------------------
+    const openFirebaseConfigModal = () => {
+      initAudio();
+      let savedConfig = null;
+      try {
+        const saved = localStorage.getItem('custom_supabase_config');
+        if (saved) savedConfig = JSON.parse(saved);
+      } catch(e) {}
+
+      if (savedConfig) {
+        document.getElementById('sbUrl').value = savedConfig.url || '';
+        document.getElementById('sbAnonKey').value = savedConfig.anonKey || '';
+      }
+      document.getElementById('firebaseConfigModal').classList.remove('hidden');
+    };
+
+    const closeFirebaseConfigModal = () => {
+      document.getElementById('firebaseConfigModal').classList.add('hidden');
+    };
+
+    const handleSaveFbConfig = () => {
+      const config = {
+        url: document.getElementById('sbUrl').value.trim(),
+        anonKey: document.getElementById('sbAnonKey').value.trim(),
+      };
+
+      if (!config.url || !config.anonKey) {
+        showToast("URL と API Key は必須項目です", "error");
+        return;
+      }
+
+      try {
+        localStorage.setItem('custom_supabase_config', JSON.stringify(config));
+        showToast("Supabaseの設定を保存しました。再起動します。");
+        closeFirebaseConfigModal();
+        startSupabase(); 
+      } catch (e) {
+        showToast("設定の書き込みに失敗しました", "error");
+      }
+    };
+
+    const handleClearFbConfig = () => {
+      localStorage.removeItem('custom_supabase_config');
+      document.getElementById('sbUrl').value = '';
+      document.getElementById('sbAnonKey').value = '';
+      showToast("設定をクリアしました。ローカル保存モードに移行します。");
+      closeFirebaseConfigModal();
+      startSupabase();
+    };
+
+    // ----------------------------------------
+    // ライフサイクル & イベントリスナー設定
+    // ----------------------------------------
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('gatekeeperOverlay').classList.add('hidden');
+      document.getElementById('mainContent').classList.remove('opacity-0', 'pointer-events-none');
+
+      startSupabase();
+      setupFormOptions();
+
+      document.getElementById('muteBtn').addEventListener('click', toggleMute);
+      document.getElementById('muteBtnMob').addEventListener('click', toggleMute);
+      
+      const openHelp = () => { 
+        initAudio(); 
+        document.getElementById('helpModal').classList.remove('hidden'); 
+      };
+      document.getElementById('helpOpenBtn').addEventListener('click', openHelp);
+      document.getElementById('helpOpenBtnMob').addEventListener('click', openHelp);
+
+      document.getElementById('helpCloseBtn').addEventListener('click', () => document.getElementById('helpModal').classList.add('hidden'));
+      document.getElementById('postOpenBtn').addEventListener('click', openPostModal);
+      document.getElementById('postCloseBtn').addEventListener('click', () => document.getElementById('postModal').classList.add('hidden'));
+      document.getElementById('detailCloseBtn').addEventListener('click', () => document.getElementById('detailModal').classList.add('hidden'));
+      document.getElementById('deleteBtn').addEventListener('click', clickDeleteBtn);
+      document.getElementById('keypadCloseBtn').addEventListener('click', () => document.getElementById('keypadModal').classList.add('hidden'));
+      
+      document.getElementById('postSubmitBtn').addEventListener('click', executeSubmitAnswer);
+      document.getElementById('detailLikeBtn').addEventListener('click', executeLike);
+
+      document.getElementById('syncBadge').addEventListener('click', openFirebaseConfigModal);
+      document.getElementById('firebaseConfigCloseBtn').addEventListener('click', closeFirebaseConfigModal);
+      document.getElementById('saveFbConfigBtn').addEventListener('click', handleSaveFbConfig);
+      document.getElementById('clearFbConfigBtn').addEventListener('click', handleClearFbConfig);
+
+      document.querySelectorAll('#keypadGrid button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const key = btn.getAttribute('data-key');
+          pressKey(key);
+        });
+      });
+    });
+  </script>
+</body>
+</html>
